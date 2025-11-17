@@ -1,129 +1,3 @@
-
-// const fs = require("fs-extra");
-// const path = require("path");
-// const { chromium } = require("playwright");
-
-// const PLAN_PATH = path.join(__dirname, "captured_plan.json");
-// const OUT_DIR = path.join(__dirname, "captures");
-// fs.ensureDirSync(OUT_DIR);
-
-// async function recordUserFlow() {
-//   const userDataDir = path.join(__dirname, "pw-user-data");
-//   const sessionFile = path.join(__dirname, "linear-state.json");
-
-//   const ctx = await chromium.launchPersistentContext(userDataDir, {
-//     headless: false,
-//     viewport: { width: 1440, height: 900 },
-//     args: [
-//       "--disable-blink-features=AutomationControlled",
-//       "--no-sandbox",
-//       "--disable-infobars",
-//     ],
-//   });
-
-//   const page = await ctx.newPage();
-
-//   if (fs.existsSync(sessionFile)) {
-//     console.log("✅ Using existing Linear session...");
-//   } else {
-//     console.log("⚠️ No session found — please log in manually once.");
-//   }
-
-//   console.log("🌐 Navigating to https://linear.app/ ...");
-//   await page.goto("https://linear.app/", { waitUntil: "domcontentloaded" });
-
-//   console.log("⏳ Waiting for Linear dashboard (up to 25s)...");
-//   await page.waitForTimeout(5000);
-//   await page.waitForSelector("body", { timeout: 25000 }).catch(() => {});
-//   console.log("✅ Page loaded, injecting recorder...");
-
-//   const actions = [];
-
-//   // Expose recorder function so the browser can call Node
-//   await page.exposeFunction("___recordAction", (data) => {
-//     actions.push({ ...data, ts: Date.now() });
-//     console.log(`${data.type.toUpperCase()} →`, data.selector, data.value || "");
-//   });
-
-//   // Inject listener script inside browser context
-//   await page.evaluate(() => {
-//     const getSelector = (el) => {
-//       if (!el || el === document.body) return "body";
-//       let path = [];
-//       while (el && el.nodeType === 1 && el !== document.body) {
-//         let sel = el.tagName.toLowerCase();
-//         if (el.id) {
-//           sel += `#${el.id}`;
-//           path.unshift(sel);
-//           break;
-//         } else if (el.classList.length > 0) {
-//           sel += "." + Array.from(el.classList).slice(0, 2).join(".");
-//         }
-//         path.unshift(sel);
-//         el = el.parentElement;
-//       }
-//       return path.join(" > ");
-//     };
-
-//     const handlerClick = (e) => {
-//       window.___recordAction({
-//         type: "click",
-//         selector: getSelector(e.target),
-//       });
-//     };
-
-//     const handlerInput = (e) => {
-//       const val =
-//         e.target?.value ??
-//         (e.target?.innerText?.trim() || e.target?.textContent?.trim());
-//       window.___recordAction({
-//         type: "input",
-//         selector: getSelector(e.target),
-//         value: val || "",
-//       });
-//     };
-
-//     window.addEventListener("click", handlerClick, true);
-//     window.addEventListener("input", handlerInput, true);
-//     window.addEventListener("change", handlerInput, true);
-
-//     console.log("✅ Recorder script injected in page context");
-//   });
-
-//   console.log("🎥 Recording started!");
-//   console.log("👉 Perform your flow manually:");
-//   console.log("   1. Go to Workspace → Projects");
-//   console.log("   2. Click Add Project");
-//   console.log("   3. Type Project name");
-//   console.log("   4. Click Create Project");
-//   console.log("🧩 When done, close the browser window or press Ctrl+C.");
-
-//   // Wait until user closes browser
-//   await new Promise((resolve) => ctx.on("close", resolve));
-
-//   // Save recorded actions
-//   await fs.writeJson(PLAN_PATH, actions, { spaces: 2 });
-//   console.log(`✅ Recording complete — saved ${actions.length} actions to ${PLAN_PATH}`);
-
-//   await ctx.close();
-// }
-
-// recordUserFlow().catch(console.error);
-
-
-/**
- * Agent Linear – autonomous browser agent for Linear.app
- * Behaviorally simulates agent reasoning over your working script
- */
-
-/**
- * Agent Linear – Autonomous project creator with smart load detection
- */
-
-/**
- * Agent Linear – with adaptive DOM introspection
- */
-
 const { chromium } = require('playwright');
 const fs = require('fs-extra');
 const path = require('path');
@@ -274,7 +148,7 @@ class LinearAgent {
           await btn.scrollIntoViewIfNeeded();
           await wait(500);
           await btn.click({ delay: 100 });
-          await wait(3000);
+          await wait(8000);
           await saveSnapshot(this.page, 'add_project_modal');
           return true;
         }
@@ -306,21 +180,58 @@ class LinearAgent {
     return false;
   }
 
-  async createProject() {
-    const sels = ['button:has-text("Create project")', '[data-active="false"].sc-cpSJdf'];
-    for (const s of sels) {
-      if (await elementExists(this.page, s)) {
-        console.log(`✅ Clicking Create via ${s}`);
-        await this.page.locator(s).click();
-        await wait(8000);
-        await saveSnapshot(this.page, 'created');
-        console.log(`🎉 Project "${this.projectName}" created.`);
-        return true;
-      }
+async createProject() {
+  console.log("🕒 Waiting for overlays to clear...");
+
+  // Remove overlay
+  await this.page.waitForSelector('.sc-jCttAn', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  await this.page.waitForTimeout(500);
+
+  console.log("🔍 Looking for Create project button...");
+
+  // Playwright-friendly selectors
+  const selectors = [
+    'button:has-text("Create project")',
+    'button[type="submit"]:has-text("Create project")',
+    '[data-active="false"].sc-cpSJdf'
+  ];
+
+  for (const sel of selectors) {
+    const exists = await elementExists(this.page, sel);
+    if (!exists) continue;
+
+    console.log(`✅ Clicking Create Project via: ${sel}`);
+
+    const locator = this.page.locator(sel);
+    await locator.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(300);
+
+    // Try normal click first
+    try {
+      await locator.click({ timeout: 5000 });
+      await wait(6000);
+      await saveSnapshot(this.page, 'created');
+      console.log(`🎉 Project "${this.projectName}" created.`);
+      return true;
+    } catch {
+      console.log("⚠️ Normal click blocked. Trying JS DOM click...");
     }
-    console.warn('❌ No Create Project button.');
-    return false;
+
+    // JS-safe fallback: extract real DOM node first
+    const domHandle = await locator.elementHandle();
+    if (domHandle) {
+      await this.page.evaluate(el => el.click(), domHandle);
+      await wait(6000);
+      await saveSnapshot(this.page, 'created');
+      console.log(`🎉 Project "${this.projectName}" created (via JS click).`);
+      return true;
+    }
   }
+
+  console.warn("❌ Create Project button not found.");
+  return false;
+}
+
 
   async execute() {
     await this.init();
