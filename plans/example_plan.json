@@ -1,0 +1,7 @@
+[
+    { "type": "goto", "url": "C:\\Users\\patna\\cc\\nav.ai\\test.html" },
+    { "type": "click", "target": "New Project" },
+    { "type": "type", "target": "Project Name", "text": "Demo Project" },
+    { "type": "click", "target": "Create" }
+  ]
+  
